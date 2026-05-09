@@ -11,6 +11,8 @@ namespace Service
 
         private readonly StreamWriter rejectWriter;
 
+        private bool disposed = false;
+
         public string SessionDirectoryPath { get; }
 
         public SessionFileWriter(string storagePath)
@@ -37,6 +39,8 @@ namespace Service
 
         public void WriteAcceptedSample(DroneSample sample)
         {
+            ThrowIfDisposed();
+
             measurementWriter.WriteLine(
                 string.Format(
                     CultureInfo.InvariantCulture,
@@ -55,8 +59,14 @@ namespace Service
             DroneSample sample,
             string reason)
         {
+            ThrowIfDisposed();
+
             rejectWriter.WriteLine(
-                reason);
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0} | {1}",
+                    reason,
+                    sample));
 
             rejectWriter.Flush();
         }
@@ -68,8 +78,45 @@ namespace Service
 
         public void Dispose()
         {
-            measurementWriter?.Dispose();
-            rejectWriter?.Dispose();
+            Dispose(true);
+
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                if (measurementWriter != null)
+                {
+                    measurementWriter.Dispose();
+                }
+
+                if (rejectWriter != null)
+                {
+                    rejectWriter.Dispose();
+                }
+
+                Console.WriteLine(
+                    "SessionFileWriter.Dispose(): fajlovi su zatvoreni za sesiju "
+                    + SessionDirectoryPath);
+            }
+
+            disposed = true;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (disposed)
+            {
+                throw new ObjectDisposedException(
+                    "SessionFileWriter");
+            }
         }
     }
 }

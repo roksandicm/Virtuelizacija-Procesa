@@ -8,6 +8,8 @@ namespace Client
 {
     class Program
     {
+        private const string SimulateDisposeArgument = "simulate-dispose";
+
         static void Main(string[] args)
         {
             ClientConfiguration configuration =
@@ -17,11 +19,28 @@ namespace Client
 
             IDroneService proxy = null;
 
+            bool serverSessionStarted = false;
+
+            bool endSessionCalled = false;
+
+            bool communicationClosed = false;
+
+            bool shouldAbort = false;
+
+            bool simulateTransferException =
+                ShouldSimulateTransferException(args);
+
             try
             {
                 Console.WriteLine(
                     "Ucitavanje CSV fajla: "
                     + configuration.CsvPath);
+
+                if (simulateTransferException)
+                {
+                    Console.WriteLine(
+                        "SIMULACIJA JE UKLJUCENA: klijent ce baciti izuzetak usred prenosa radi provere Dispose mehanizma.");
+                }
 
                 List<DroneSample> samples;
 
@@ -55,6 +74,8 @@ namespace Client
                 SessionResponse startResponse =
                     proxy.StartSession(meta);
 
+                serverSessionStarted = true;
+
                 Console.WriteLine(
                     "SERVER: "
                     + startResponse.Message);
@@ -69,6 +90,14 @@ namespace Client
                 {
                     for (int i = 0; i < samples.Count; i++)
                     {
+                        if (simulateTransferException
+                            &&
+                            i == 10)
+                        {
+                            throw new InvalidOperationException(
+                                "SIMULACIJA: prekid prenosa usred slanja uzoraka.");
+                        }
+
                         SessionResponse response =
                             proxy.PushSample(
                                 samples[i]);
@@ -95,13 +124,17 @@ namespace Client
                 SessionResponse endResponse =
                     proxy.EndSession();
 
+                endSessionCalled = true;
+
                 Console.WriteLine(
                     "SERVER: "
                     + endResponse.Message);
 
-                ((IClientChannel)proxy).Close();
+                CloseCommunication(
+                    proxy,
+                    factory);
 
-                factory.Close();
+                communicationClosed = true;
             }
             catch (FaultException<DataFormatFault> e)
             {
@@ -109,7 +142,7 @@ namespace Client
                     "DataFormatFault: "
                     + e.Detail.Message);
 
-                Abort(proxy, factory);
+                shouldAbort = true;
             }
             catch (FaultException<ValidationFault> e)
             {
@@ -117,7 +150,7 @@ namespace Client
                     "ValidationFault: "
                     + e.Detail.Message);
 
-                Abort(proxy, factory);
+                shouldAbort = true;
             }
             catch (CommunicationException e)
             {
@@ -125,7 +158,7 @@ namespace Client
                     "CommunicationException: "
                     + e.Message);
 
-                Abort(proxy, factory);
+                shouldAbort = true;
             }
             catch (TimeoutException e)
             {
@@ -133,7 +166,7 @@ namespace Client
                     "TimeoutException: "
                     + e.Message);
 
-                Abort(proxy, factory);
+                shouldAbort = true;
             }
             catch (Exception e)
             {
@@ -141,13 +174,122 @@ namespace Client
                     "Greska: "
                     + e.Message);
 
-                Abort(proxy, factory);
+                shouldAbort = true;
+            }
+            finally
+            {
+                if (serverSessionStarted && !endSessionCalled)
+                {
+                    TryEndSessionForCleanup(
+                        proxy,
+                        ref endSessionCalled);
+                }
+
+                if (!communicationClosed)
+                {
+                    CleanupCommunication(
+                        proxy,
+                        factory,
+                        shouldAbort);
+                }
             }
 
             Console.WriteLine(
                 "Pritisni ENTER za kraj...");
 
             Console.ReadLine();
+        }
+
+        private static bool ShouldSimulateTransferException(
+            string[] args)
+        {
+            if (args == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (string.Equals(
+                    args[i],
+                    SimulateDisposeArgument,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void TryEndSessionForCleanup(
+            IDroneService proxy,
+            ref bool endSessionCalled)
+        {
+            if (proxy == null)
+            {
+                return;
+            }
+
+            try
+            {
+                SessionResponse cleanupResponse =
+                    proxy.EndSession();
+
+                endSessionCalled = true;
+
+                Console.WriteLine(
+                    "FINALLY: EndSession je pozvan nakon greske, resursi na serveru treba da budu zatvoreni. "
+                    + cleanupResponse.Message);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(
+                    "FINALLY: EndSession nije mogao da se pozove nakon greske: "
+                    + e.Message);
+            }
+        }
+
+        private static void CloseCommunication(
+            IDroneService proxy,
+            ChannelFactory<IDroneService> factory)
+        {
+            IClientChannel channel =
+                proxy as IClientChannel;
+
+            if (channel != null)
+            {
+                channel.Close();
+            }
+
+            if (factory != null)
+            {
+                factory.Close();
+            }
+        }
+
+        private static void CleanupCommunication(
+            IDroneService proxy,
+            ChannelFactory<IDroneService> factory,
+            bool shouldAbort)
+        {
+            if (shouldAbort)
+            {
+                Abort(proxy, factory);
+
+                return;
+            }
+
+            try
+            {
+                CloseCommunication(
+                    proxy,
+                    factory);
+            }
+            catch
+            {
+                Abort(proxy, factory);
+            }
         }
 
         private static void Abort(

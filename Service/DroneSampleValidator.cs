@@ -1,6 +1,5 @@
 ﻿using Common;
 using System;
-using System.Globalization;
 
 namespace Service
 {
@@ -8,72 +7,69 @@ namespace Service
     {
         private readonly ConfigurationReader configuration;
 
-        public DroneSampleValidator(
-            ConfigurationReader configuration)
+        public DroneSampleValidator(ConfigurationReader configuration)
         {
             this.configuration = configuration;
         }
 
-        public string GetValidationError(
-            DroneSample sample,
-            double? currentWindAverage)
+        public string GetValidationError(DroneSample sample)
         {
             if (sample == null)
             {
                 return "DroneSample nije poslat.";
             }
 
-            if (sample.WindSpeed < 0)
+            if (!IsValidNumber(sample.LinearAccelerationX))
             {
-                return "WindSpeed mora biti pozitivan.";
+                return "LinearAccelerationX nije ispravan broj.";
             }
 
-            if (Math.Abs(sample.WindSpeed) >
-                configuration.WThreshold)
+            if (!IsValidNumber(sample.LinearAccelerationY))
             {
-                return "WindSpeed prelazi W_threshold. Vrednost: " +
-                       sample.WindSpeed.ToString(
-                           CultureInfo.InvariantCulture);
+                return "LinearAccelerationY nije ispravan broj.";
             }
 
-            double linearAccelerationMagnitude =
-                Math.Sqrt(
-                    sample.LinearAccelerationX * sample.LinearAccelerationX +
-                    sample.LinearAccelerationY * sample.LinearAccelerationY +
-                    sample.LinearAccelerationZ * sample.LinearAccelerationZ);
-
-            if (linearAccelerationMagnitude >
-                configuration.LThreshold)
+            if (!IsValidNumber(sample.LinearAccelerationZ))
             {
-                return "LinearAcceleration prelazi L_threshold. Magnitude: " +
-                       linearAccelerationMagnitude.ToString(
-                           CultureInfo.InvariantCulture);
+                return "LinearAccelerationZ nije ispravan broj.";
             }
 
-            if (currentWindAverage.HasValue &&
-                currentWindAverage.Value > 0)
+            if (!IsValidNumber(sample.WindSpeed))
             {
-                double lowerLimit =
-                    currentWindAverage.Value *
-                    (1 - configuration.AllowedDeviation);
+                return "WindSpeed nije ispravan broj.";
+            }
 
-                double upperLimit =
-                    currentWindAverage.Value *
-                    (1 + configuration.AllowedDeviation);
+            if (!IsValidNumber(sample.WindAngle))
+            {
+                return "WindAngle nije ispravan broj.";
+            }
 
-                if (sample.WindAngle < lowerLimit ||
-                    sample.WindAngle > upperLimit)
-                {
-                    return string.Format(
-                        CultureInfo.InvariantCulture,
-                        "WindAngle odstupa vise od ±{0:P0} od proseka. WindAngle={1}, Average={2}",
-                        configuration.AllowedDeviation,
-                        sample.WindAngle,
-                        currentWindAverage.Value);
-                }
+            if (!IsValidNumber(sample.FlightDuration))
+            {
+                return "FlightDuration nije ispravan broj.";
+            }
+
+            if (sample.WindSpeed <= 0)
+            {
+                return "WindSpeed mora biti veći od 0 m/s.";
+            }
+
+            if (sample.WindAngle < 0 || sample.WindAngle >= 360)
+            {
+                return "WindAngle mora biti u opsegu od 0 do 359 stepeni.";
+            }
+
+            if (sample.FlightDuration < 0)
+            {
+                return "FlightDuration ne sme biti negativan.";
             }
 
             return null;
+        }
+
+        private bool IsValidNumber(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
     }
 }

@@ -20,9 +20,9 @@ namespace Service
         {
             WThreshold = ReadDouble("W_threshold", 50);
 
-            LThreshold = ReadDouble("L_threshold", 20);
+            LThreshold = ReadDouble("L_threshold", 0.70);
 
-            AllowedDeviation = ReadDouble("AllowedDeviation", 0.22);
+            AllowedDeviation = ReadDouble("AllowedDeviation", 0.25);
 
             StoragePath = ReadString("storagePath", "Sessions");
         }
