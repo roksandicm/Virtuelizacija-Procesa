@@ -28,7 +28,6 @@ namespace Service
             configuration = new ConfigurationReader();
             validator = new DroneSampleValidator(configuration);
 
-            // Pretplata na događaje radi konzolnog logovanja.
             OnTransferStarted += LogTransferStarted;
             OnSampleReceived += LogSampleReceived;
             OnTransferCompleted += LogTransferCompleted;
